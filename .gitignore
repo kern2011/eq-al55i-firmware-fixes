@@ -1,0 +1,6 @@
+# Firmware images: never commit vendor or patched firmware
+*.mcf
+*.mcf.tmp
+.*.mcf.tmp
+*.zip
+__pycache__/
