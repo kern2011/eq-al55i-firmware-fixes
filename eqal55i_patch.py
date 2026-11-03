@@ -426,10 +426,16 @@ def describe(data):
         else:
             lines.append("  {:<26} CHANGED, {}".format(name, b[0]))
             patched = True
-    site("Round to nearest (P9)", ROUND_HOOK[0], ROUND_HOOK[1], ROUND_HOOK[2])
+    rhook = data[ROUND_HOOK[0]:ROUND_HOOK[0] + 4]
     rcode = data[ROUND_STUB_AT:ROUND_STUB_AT + len(ROUND_STUB)]
-    if data[ROUND_HOOK[0]:ROUND_HOOK[0] + 4] == ROUND_HOOK[2] and rcode != ROUND_STUB:
-        lines[-1] = "  {:<26} unknown bytes".format("Round to nearest (P9)")
+    if rhook == ROUND_HOOK[1] and rcode == b"\xff" * len(ROUND_STUB):
+        lines.append("  {:<26} stock".format("Round to nearest (P9)"))
+    elif rhook == ROUND_HOOK[2] and rcode == ROUND_STUB:
+        lines.append("  {:<26} PATCHED".format("Round to nearest (P9)"))
+        patched = True
+    else:
+        lines.append("  {:<26} unknown bytes".format("Round to nearest (P9)"))
+        patched = True
     name = "In-position status (P7)"
     ihook = data[INPOS_HOOK[0]:INPOS_HOOK[0] + 4]
     icode = data[INPOS_STUB_AT:INPOS_STUB_AT + len(INPOS_STUB)]
@@ -493,7 +499,12 @@ def write_output(out, inp, img):
         if same:
             fail("output would overwrite the input file")
         old = read_image(out)
-        if old is None or masked_sha256(old) != MASKED_STOCK_SHA256 or sha256(old) == STOCK_SHA256:
+        ours = (old is not None and masked_sha256(old) == MASKED_STOCK_SHA256
+                and sha256(old) != STOCK_SHA256)
+        if ours:
+            lines, patched = describe(old)
+            ours = patched and not any("unknown" in line for line in lines)
+        if not ours:
             fail("{} already exists and isn't a patched image from this tool; "
                  "refusing to overwrite it".format(out))
     folder = os.path.dirname(os.path.abspath(out))
