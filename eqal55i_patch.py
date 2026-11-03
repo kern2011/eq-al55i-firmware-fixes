@@ -13,9 +13,8 @@ Not affiliated with Sky-Watcher. Use entirely at your own risk. See README.md.
 
 Examples:
   python eqal55i_patch.py MC016_Ver0348.mcf --recommended
-  python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --dec-ki 16
-  python eqal55i_patch.py MC016_Ver0348.mcf --recommended --round --in-position 5
-  python eqal55i_patch.py --check MC016_Ver0348_p1p2p6_ff240_dki16.mcf
+  python eqal55i_patch.py MC016_Ver0348.mcf --fix-all --dec-ff 240 --dec-ki 16 --round --in-position 5
+  python eqal55i_patch.py --check MC016_Ver0348_p1p2p6_ff240_dki16_rnd_ip5.mcf
 """
 import argparse
 import hashlib
@@ -37,8 +36,8 @@ IMAGE_SIZE = 0x20000            # 128 KB, loaded at 0x08000000
 FLASH_BASE = 0x08000000
 APP_START = 0x7000              # below this is the bootloader: never written
 VALID_WORD = 0x1FFFC            # "application valid" word: never written
-RECOMMENDED_SHA256 = "71e6ab332625c440e50405351eb624228a6676b4487b3c782fea9a18f89f680e"
-# --recommended of version 1.0.0 (no Dec Ki change), still recognised by --check.
+RECOMMENDED_SHA256 = "b224dbb4a0429c00eac90645a58ab870060a582b3fc4f93a85099fd6695355c9"
+# --recommended of version 1.0.0 (fixes + Dec feed-forward only), still recognised by --check.
 RECOMMENDED_V1_SHA256 = "d5b06ac4d2e11c899fd963ebb13887dbcbd692b51ae25831508fd2bc58601273"
 
 # ---------------------------------------------------------------------------
@@ -465,7 +464,8 @@ def check(path):
     if sha256(data) == RECOMMENDED_SHA256:
         print("  matches the tested --recommended build")
     elif sha256(data) == RECOMMENDED_V1_SHA256:
-        print("  matches the --recommended build of version 1.0.0 (without Dec Ki 16)")
+        print("  matches the --recommended build of version 1.0.0 (without Dec Ki 16, "
+              "rounding and in-position status)")
     lines, _ = describe(data)
     print("\n".join(lines))
     if any("unknown" in line for line in lines):
@@ -533,8 +533,8 @@ def parse_args(argv):
 
     g = ap.add_argument_group("presets")
     g.add_argument("--recommended", action="store_true",
-                   help="all fixes, Dec feed-forward {} and Dec Ki {} (the tested combination)"
-                        .format(FF_DEFAULT, DKI_DEFAULT))
+                   help="all fixes, Dec feed-forward {}, Dec Ki {}, --round and --in-position {} "
+                        "(the tested combination)".format(FF_DEFAULT, DKI_DEFAULT, INPOS_DEFAULT))
 
     g = ap.add_argument_group("fixes")
     g.add_argument("--fix-usb", action="store_true",
@@ -560,8 +560,8 @@ def parse_args(argv):
                         "(removes the ~3-count direction bias on guide pulses)")
     g.add_argument("--in-position", type=int, metavar="N",
                    help="after a move, :f reports 'stopped' only once the axis is within N counts "
-                        "({}-{}) and nearly still, or after 1 s ({} was tested)"
-                        .format(INPOS_MIN, INPOS_MAX, INPOS_DEFAULT))
+                        "({}-{}) and nearly still, or after 1 s (--recommended uses {}, the value "
+                        "tested)".format(INPOS_MIN, INPOS_MAX, INPOS_DEFAULT))
 
     g = ap.add_argument_group("advanced (leave at stock; need --experimental)")
     g.add_argument("--experimental", action="store_true",
@@ -596,8 +596,9 @@ def main(argv=None):
         "x06": a.fix_x06 or a.fix_all or a.recommended,
         "ff": a.dec_ff if a.dec_ff is not None else (FF_DEFAULT if a.recommended else None),
         "cap": a.cap,
-        "round": a.round,
-        "inpos": a.in_position,
+        "round": a.round or a.recommended,
+        "inpos": a.in_position if a.in_position is not None
+                 else (INPOS_DEFAULT if a.recommended else None),
     }
     for key in GAINS:
         opt[key] = getattr(a, key)

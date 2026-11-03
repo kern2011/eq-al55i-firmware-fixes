@@ -78,36 +78,30 @@ Needs Python 3.8 or newer. Nothing else to install.
 python eqal55i_patch.py MC016_Ver0348.mcf --recommended
 ```
 
-This writes `MC016_Ver0348_p1p2p6_ff240_dki16.mcf` and prints every change it made. Flash it
-with Sky-Watcher's loader, with the mount bare and powered from a stable supply.
+This writes `MC016_Ver0348_p1p2p6_ff240_dki16_rnd_ip5.mcf` and prints every change it made.
+Flash it with Sky-Watcher's loader, with the mount bare and powered from a stable supply.
 
 **Choose all your options in one command.** Each build starts from the official stock file,
 and the script won't accept an already-patched file. To add or change a fix later, build again
 from the stock file with the full set of options. For example, `--recommended` is the same as:
 
 ```
-python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --dec-ki 16
-```
-
-The build with every tested option:
-
-```
-python eqal55i_patch.py MC016_Ver0348.mcf --recommended --round --in-position 5
+python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --dec-ki 16 --round --in-position 5
 ```
 
 ### Options
 
 | Option | What it does |
 | --- | --- |
-| `--recommended` | All three fixes, Dec feed-forward at 240 and Dec integral gain 16. The tested combination. |
+| `--recommended` | All three fixes, Dec feed-forward 240, Dec integral gain 16, rounding and in-position status at 5 counts. The tested combination. |
 | `--fix-usb` | USB reply fix only. |
 | `--fix-d-cr` | `:D` reply fix only. |
 | `--fix-x06` | `:X 06` fix only. |
 | `--fix-all` | All three fixes above, without changing Dec motion. |
 | `--dec-ff N` | Dec feed-forward strength, in motor-drive units out of 2401. Range 1–300; `--recommended` uses 240. 180–240 suits most setups. |
 | `--dec-ki N` | Dec integral gain (stock 8). Range 1–32; `--recommended` uses 16, the only value tested above stock. Higher closes the last few counts faster after a move. |
-| `--round` | Round the firmware's target to the nearest count instead of toward home. Both axes. |
-| `--in-position N` | Report "stopped" only when the axis is within N counts (1–10) and nearly still, or after 1 s. 5 was tested. Both axes. |
+| `--round` | Round the firmware's target to the nearest count instead of toward home. Both axes. Included in `--recommended`. |
+| `--in-position N` | Report "stopped" only when the axis is within N counts (1–10) and nearly still, or after 1 s. Both axes. `--recommended` uses 5, the value tested. |
 | `--check FILE` | Shows which fixes a `.mcf` file contains. |
 
 ### Advanced options (need `--experimental`)
@@ -149,7 +143,7 @@ Tested on an EQ-AL55i Pro, bare mount, over USB:
   from about 2.5 to 1.5 counts.
 - **In-position status:** "stopped" was reported with the axis within 5 counts on all 48 test
   gotos, 0.1–1.0 s later than stock. Guide pulses report "stopped" about 40 ms after they end.
-- **ConformU:** with `--recommended --round --in-position 5`, every pulse-guide test landed
+- **ConformU:** with `--recommended`, every pulse-guide test landed
   within tolerance on its own axis.
 - **At rest:** Dec held still. RA is unchanged by the patches.
 
