@@ -136,16 +136,16 @@ Tested on an EQ-AL55i Pro, bare mount, over USB:
 - **Dec delivery:** 500 ms pulses in the same direction land within about 1 count of target
   (1 count ≈ 0.36″).
 - **Settling after gotos:** after gotos of 0.1–45°, Dec is within 2″ of target almost
-  immediately (stock gain: 1.3–1.7 s) and within 2 counts (under 1″) in about 1 s. RA is unchanged
-  at about 0.7 s.
+  immediately (stock gain: 1.3–1.7 s) and within 2 counts (under 1″) in about 1 s. RA is
+  unchanged at about 0.7 s.
 - **Rounding:** in ASCOM ConformU's pulse-guide tests, the difference between East and West RA
   pulses dropped from about 3.5 counts to under 1, and between North and South Dec pulses
   from about 2.5 to 1.5 counts.
 - **In-position status:** "stopped" was reported with the axis within 5 counts on all 48 test
   gotos, 0.1–1.0 s later than stock. Guide pulses report "stopped" about 40 ms after they end.
-- **ConformU:** with `--recommended`, every pulse-guide test landed
-  within tolerance on its own axis.
-- **At rest:** Dec held still. RA is unchanged by the patches.
+- **ConformU:** with `--recommended`, every pulse-guide test landed within tolerance on its
+  own axis.
+- **At rest:** Dec held still.
 
 ## License
 
