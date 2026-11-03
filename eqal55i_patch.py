@@ -13,7 +13,7 @@ Not affiliated with Sky-Watcher. Use entirely at your own risk. See README.md.
 
 Examples:
   python eqal55i_patch.py MC016_Ver0348.mcf --recommended
-  python eqal55i_patch.py MC016_Ver0348.mcf --fix-all --dec-ff 240 --round --in-position 5
+  python eqal55i_patch.py MC016_Ver0348.mcf --fix-all --dec-ff 240 --dec-ki 16 --round --in-position 5
   python eqal55i_patch.py --check MC016_Ver0348_p1p2p6_ff240_dki16_rnd_ip5.mcf
 """
 import argparse
@@ -183,8 +183,8 @@ GAINS = {   # option: (offset, register, stock, max, label, name-tag)
     "ra_kp": (0x9A8C, 0, 20, KP_MAX, "RA Kp", "rkp"),
     "ra_ki": (0x9A90, 0, 16, KI_MAX, "RA Ki", "rki"),
 }
-ADVANCED_GAINS = ("dec_ki", "dec_kp", "ra_kp", "ra_ki")   # all need --experimental
-DKI_DEFAULT = 16                # --recommended sets this without --experimental; bench-tested
+ADVANCED_GAINS = ("dec_ki", "dec_kp", "ra_kp", "ra_ki")   # listed under "advanced"
+DKI_DEFAULT = 16                # --recommended; the value bench-tested
 
 FF_DEFAULT = 240
 FF_MAX = 300
@@ -560,9 +560,9 @@ def parse_args(argv):
                         "({}-{}) and nearly still, or after 1 s (--recommended uses {}, the value "
                         "tested)".format(INPOS_MIN, INPOS_MAX, INPOS_DEFAULT))
 
-    g = ap.add_argument_group("advanced (leave at stock; need --experimental)")
-    g.add_argument("--experimental", action="store_true",
-                   help="required for any option in this group")
+    g = ap.add_argument_group("advanced (leave at stock unless you can measure the result)")
+    # Accepted and ignored, so command lines written for version 1.0.0 still work.
+    g.add_argument("--experimental", action="store_true", help=argparse.SUPPRESS)
     g.add_argument("--cap", type=float, metavar="F",
                    help="hold/brake drive share, {}-{} (stock {})".format(CAP_MIN, CAP_MAX, CAP_STOCK))
     for key in ADVANCED_GAINS:
@@ -605,13 +605,8 @@ def main(argv=None):
         fail("--in-position must be {}..{}".format(INPOS_MIN, INPOS_MAX))
     if opt["ff"] is not None and not 1 <= opt["ff"] <= FF_MAX:
         fail("--dec-ff must be 1..{}".format(FF_MAX))
-    advanced = [k for k in ("cap",) + ADVANCED_GAINS if opt[k] is not None]
     if opt["dec_ki"] is None and a.recommended:
-        opt["dec_ki"] = DKI_DEFAULT     # part of the tested build; no --experimental needed
-    if advanced and not a.experimental:
-        fail("--{} is an advanced option: leave it at stock unless you can measure the "
-             "result. To use it anyway, add --experimental."
-             .format(advanced[0].replace("_", "-")))
+        opt["dec_ki"] = DKI_DEFAULT
     if opt["cap"] is not None and not CAP_MIN <= opt["cap"] <= CAP_MAX:
         fail("--cap must be {}..{}".format(CAP_MIN, CAP_MAX))
     if opt["cap"] is not None and opt["cap"] == CAP_STOCK:

@@ -83,11 +83,10 @@ Flash it with Sky-Watcher's loader, with the mount bare and powered from a stabl
 
 **Choose all your options in one command.** Each build starts from the official stock file,
 and the script won't accept an already-patched file. To add or change a fix later, build again
-from the stock file with the full set of options. For example, `--recommended` is these
-options plus Dec integral gain 16:
+from the stock file with the full set of options. For example, `--recommended` is the same as:
 
 ```
-python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --round --in-position 5
+python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --dec-ki 16 --round --in-position 5
 ```
 
 ### Options
@@ -104,7 +103,7 @@ python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-f
 | `--in-position N` | Report "stopped" only when the axis is within N counts (1–10) and nearly still, or after 1 s. Both axes. `--recommended` uses 5, the value tested. |
 | `--check FILE` | Shows which fixes a `.mcf` file contains. |
 
-### Advanced options (need `--experimental`)
+### Advanced options
 
 **Leave these alone.** `--recommended` already includes the one servo change that helped on
 the bench (Dec integral gain 16). The settings below adjust the servo tuning: the gains, and
