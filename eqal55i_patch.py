@@ -13,8 +13,8 @@ Not affiliated with Sky-Watcher. Use entirely at your own risk. See README.md.
 
 Examples:
   python eqal55i_patch.py MC016_Ver0348.mcf --recommended
-  python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240
-  python eqal55i_patch.py --check MC016_Ver0348_p1p2p6_ff240.mcf
+  python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --dec-ki 16
+  python eqal55i_patch.py --check MC016_Ver0348_p1p2p6_ff240_dki16.mcf
 """
 import argparse
 import hashlib
@@ -22,7 +22,7 @@ import os
 import struct
 import sys
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 if sys.version_info < (3, 8):
     sys.exit("eqal55i_patch needs Python 3.8 or newer")
@@ -36,7 +36,9 @@ IMAGE_SIZE = 0x20000            # 128 KB, loaded at 0x08000000
 FLASH_BASE = 0x08000000
 APP_START = 0x7000              # below this is the bootloader: never written
 VALID_WORD = 0x1FFFC            # "application valid" word: never written
-RECOMMENDED_SHA256 = "d5b06ac4d2e11c899fd963ebb13887dbcbd692b51ae25831508fd2bc58601273"
+RECOMMENDED_SHA256 = "71e6ab332625c440e50405351eb624228a6676b4487b3c782fea9a18f89f680e"
+# --recommended of version 1.0.0 (no Dec Ki change), still recognised by --check.
+RECOMMENDED_V1_SHA256 = "d5b06ac4d2e11c899fd963ebb13887dbcbd692b51ae25831508fd2bc58601273"
 
 # ---------------------------------------------------------------------------
 # Patch data (file offsets; flash address = 0x08000000 + offset)
@@ -101,12 +103,16 @@ CAP_AT = 0x9628
 CAP_STOCK = 0.10
 
 # P4: servo gains, written at boot as "movs rN,#imm" (byte 0 = imm, byte 1 = 0x20|reg).
-GAINS = {   # option: (offset, register, stock, label, name-tag)
-    "dec_kp": (0x9A6A, 1, 25, "Dec Kp", "dkp"),
-    "dec_ki": (0x9A6E, 1, 8, "Dec Ki", "dki"),
-    "ra_kp": (0x9A8C, 0, 20, "RA Kp", "rkp"),
-    "ra_ki": (0x9A90, 0, 16, "RA Ki", "rki"),
+# Limits are the same on both axes: twice the higher stock value (Kp 25/20, Ki 8/16).
+KP_MAX, KI_MAX = 50, 32
+GAINS = {   # option: (offset, register, stock, max, label, name-tag)
+    "dec_kp": (0x9A6A, 1, 25, KP_MAX, "Dec Kp", "dkp"),
+    "dec_ki": (0x9A6E, 1, 8, KI_MAX, "Dec Ki", "dki"),
+    "ra_kp": (0x9A8C, 0, 20, KP_MAX, "RA Kp", "rkp"),
+    "ra_ki": (0x9A90, 0, 16, KI_MAX, "RA Ki", "rki"),
 }
+ADVANCED_GAINS = ("dec_kp", "ra_kp", "ra_ki")   # need --experimental; dec_ki does not
+DKI_DEFAULT = 16                                # --recommended; the value bench-tested
 
 FF_DEFAULT = 240
 FF_MAX = 300
@@ -122,7 +128,7 @@ RANGES = {
     "ff": [(FF_HOOK[0], 4), (FF_STUB_AT, len(FF_STUB) + 4)],
     "cap": [(CAP_AT, 8)],
 }
-for _k, (_off, _r, _s, _l, _t) in GAINS.items():
+for _k, (_off, _r, _s, _m, _l, _t) in GAINS.items():
     RANGES[_k] = [(_off, 2)]
 # SHA-256 of the official file with all of the above ranges zeroed. An image whose
 # masked hash matches this is identical to the official file outside the patch sites.
@@ -150,6 +156,12 @@ def _self_check():
         assert APP_START <= a and a + n <= VALID_WORD, "patch outside the application"
     for a, n in ((USB_STUB_AT, len(USB_STUB)), (FF_STUB_AT, len(FF_STUB) + 4)):
         assert a >= APP_END and a % 4 == 0, "new code must be word-aligned free flash"
+    kp = [g[2] for k, g in GAINS.items() if k.endswith("kp")]
+    ki = [g[2] for k, g in GAINS.items() if k.endswith("ki")]
+    assert KP_MAX == 2 * max(kp) and KI_MAX == 2 * max(ki), "limits: 2x the higher stock value"
+    for _off, _reg, stock_val, top, _l, _t in GAINS.values():
+        assert stock_val < top <= 255
+    assert 1 <= DKI_DEFAULT <= GAINS["dec_ki"][3] and set(ADVANCED_GAINS) < set(GAINS)
 
 
 _self_check()
@@ -234,7 +246,7 @@ def build(stock, opt):
         put(img, CAP_AT, struct.pack("<d", CAP_STOCK), struct.pack("<d", opt["cap"]),
             "drive cap {} -> {} (P3)".format(CAP_STOCK, opt["cap"]))
         tags.append("cap" + "{:g}".format(opt["cap"]).replace(".", ""))
-    for key, (off, reg, stock_val, label, tag) in GAINS.items():
+    for key, (off, reg, stock_val, _top, label, tag) in GAINS.items():
         val = opt[key]
         if val is not None:
             put(img, off, movs(reg, stock_val), movs(reg, val),
@@ -304,7 +316,7 @@ def describe(data):
     else:
         lines.append("  {:<26} CHANGED, {:g}".format("Drive cap (P3)", cap))
         patched = True
-    for off, reg, stock_val, label, _ in GAINS.values():
+    for off, reg, stock_val, _top, label, _ in GAINS.values():
         b = data[off:off + 2]
         name = "{} (P4)".format(label)
         if b[1] != 0x20 | reg:
@@ -335,6 +347,8 @@ def check(path):
     print("  everything outside the patch sites matches the official v3.48")
     if sha256(data) == RECOMMENDED_SHA256:
         print("  matches the tested --recommended build")
+    elif sha256(data) == RECOMMENDED_V1_SHA256:
+        print("  matches the --recommended build of version 1.0.0 (without Dec Ki 16)")
     lines, _ = describe(data)
     print("\n".join(lines))
     if any("unknown" in line for line in lines):
@@ -402,7 +416,8 @@ def parse_args(argv):
 
     g = ap.add_argument_group("presets")
     g.add_argument("--recommended", action="store_true",
-                   help="all fixes plus Dec feed-forward 240 (the tested combination)")
+                   help="all fixes, Dec feed-forward {} and Dec Ki {} (the tested combination)"
+                        .format(FF_DEFAULT, DKI_DEFAULT))
 
     g = ap.add_argument_group("fixes")
     g.add_argument("--fix-usb", action="store_true",
@@ -414,19 +429,23 @@ def parse_args(argv):
     g.add_argument("--fix-all", action="store_true",
                    help="all three fixes, without changing Dec motion")
 
-    g = ap.add_argument_group("Dec guiding")
+    g = ap.add_argument_group("Dec motion")
     g.add_argument("--dec-ff", type=int, metavar="N",
                    help="Dec feed-forward strength, 1-{} of 2401 (--recommended uses {})"
                         .format(FF_MAX, FF_DEFAULT))
+    g.add_argument("--dec-ki", type=int, metavar="N",
+                   help="Dec integral gain, 1-{} (stock {}; --recommended uses {}, the only "
+                        "value tested above stock)".format(KI_MAX, GAINS["dec_ki"][2], DKI_DEFAULT))
 
-    g = ap.add_argument_group("advanced (untested on hardware; you don't need these)")
+    g = ap.add_argument_group("advanced (leave at stock; need --experimental)")
     g.add_argument("--experimental", action="store_true",
                    help="required for any option in this group")
     g.add_argument("--cap", type=float, metavar="F",
                    help="hold/brake drive share, {}-{} (stock {})".format(CAP_MIN, CAP_MAX, CAP_STOCK))
-    for key, (_, _, stock_val, label, _) in GAINS.items():
+    for key in ADVANCED_GAINS:
+        _, _, stock_val, top, label, _ = GAINS[key]
         g.add_argument("--" + key.replace("_", "-"), type=int, metavar="N",
-                       help="{}, 1-{} (stock {})".format(label, 2 * stock_val, stock_val))
+                       help="{}, 1-{} (stock {})".format(label, top, stock_val))
 
     g = ap.add_argument_group("other")
     g.add_argument("--check", metavar="FILE", help="show which fixes a .mcf file contains")
@@ -453,19 +472,26 @@ def main(argv=None):
     }
     for key in GAINS:
         opt[key] = getattr(a, key)
+    if opt["dec_ki"] is None and a.recommended:
+        opt["dec_ki"] = DKI_DEFAULT
 
     if opt["ff"] is not None and not 1 <= opt["ff"] <= FF_MAX:
         fail("--dec-ff must be 1..{}".format(FF_MAX))
-    advanced = [k for k in ["cap"] + list(GAINS) if opt[k] is not None]
+    advanced = [k for k in ("cap",) + ADVANCED_GAINS if opt[k] is not None]
     if advanced and not a.experimental:
-        fail("--{} is an advanced option, untested on hardware. You don't need it; "
-             "if you really do, add --experimental."
+        fail("--{} is an advanced option: leave it at stock unless you can measure the "
+             "result. To use it anyway, add --experimental."
              .format(advanced[0].replace("_", "-")))
     if opt["cap"] is not None and not CAP_MIN <= opt["cap"] <= CAP_MAX:
         fail("--cap must be {}..{}".format(CAP_MIN, CAP_MAX))
-    for key, (_, _, stock_val, _, _) in GAINS.items():
-        if opt[key] is not None and not 1 <= opt[key] <= 2 * stock_val:
-            fail("--{} must be 1..{}".format(key.replace("_", "-"), 2 * stock_val))
+    if opt["cap"] is not None and opt["cap"] == CAP_STOCK:
+        fail("--cap {} is the stock value; leave the option out".format(opt["cap"]))
+    for key, (_, _, stock_val, top, _, _) in GAINS.items():
+        if opt[key] is not None and not 1 <= opt[key] <= top:
+            fail("--{} must be 1..{}".format(key.replace("_", "-"), top))
+        if opt[key] == stock_val:
+            fail("--{} {} is the stock value; leave the option out"
+                 .format(key.replace("_", "-"), stock_val))
     if not any(v not in (None, False) for v in opt.values()):
         fail("no fixes selected. Try --recommended (see --help).")
 

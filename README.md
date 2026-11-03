@@ -41,6 +41,11 @@ is strong enough to overcome gear friction. Feed-forward adds a fixed push in th
 travel as soon as a Dec move starts. It's removed when the move stops, so it adds nothing at
 rest, and RA is not changed.
 
+**Dec settling.** After a goto, Dec stops a few counts short of or past its target. The
+servo's integral term then has to build up enough drive to move it the rest of the way against
+friction. With the stock gain that's slow, so the last few counts take 1–2 s. Doubling the Dec
+integral gain (8 → 16) makes it build twice as fast. RA is not changed.
+
 **`:D` reply fix.** The `:D` command returns its value without the carriage return that
 ends every other reply. Some drivers then wait for, or mis-read, the next reply.
 
@@ -59,43 +64,45 @@ Needs Python 3.8 or newer. Nothing else to install.
 python eqal55i_patch.py MC016_Ver0348.mcf --recommended
 ```
 
-This writes `MC016_Ver0348_p1p2p6_ff240.mcf` and prints every change it made. Flash it with
-Sky-Watcher's loader, with the mount bare and powered from a stable supply.
+This writes `MC016_Ver0348_p1p2p6_ff240_dki16.mcf` and prints every change it made. Flash it
+with Sky-Watcher's loader, with the mount bare and powered from a stable supply.
 
 **Choose all your options in one command.** Each build starts from the official stock file,
 and the script won't accept an already-patched file. To add or change a fix later, build again
 from the stock file with the full set of options. For example, `--recommended` is the same as:
 
 ```
-python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240
+python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --dec-ki 16
 ```
 
 ### Options
 
 | Option | What it does |
 | --- | --- |
-| `--recommended` | All four fixes, with Dec feed-forward at 240. The tested combination. |
+| `--recommended` | All three fixes, Dec feed-forward at 240 and Dec integral gain 16. The tested combination. |
 | `--fix-usb` | USB reply fix only. |
 | `--fix-d-cr` | `:D` reply fix only. |
 | `--fix-x06` | `:X 06` fix only. |
 | `--fix-all` | All three fixes above, without changing Dec motion. |
 | `--dec-ff N` | Dec feed-forward strength, in motor-drive units out of 2401. Range 1–300; `--recommended` uses 240. 180–240 suits most setups. |
+| `--dec-ki N` | Dec integral gain (stock 8). Range 1–32; `--recommended` uses 16, the only value tested above stock. Higher closes the last few counts faster after a move. |
 | `--check FILE` | Shows which fixes a `.mcf` file contains. |
 
-### Advanced options (untested on hardware; need `--experimental`)
+### Advanced options (need `--experimental`)
 
-**You don't need these.** `--recommended` fixes the problems above without them.
+**Leave these at stock.** `--recommended` already includes the one servo change that helped on
+the bench (Dec integral gain 16). The settings below adjust the rest of the servo tuning: the
+other gains, and how hard the motor may hold or brake. None of them improved anything in
+testing, and a bad value can make an axis hunt, buzz or overshoot. Only touch them if you
+understand servo tuning and can measure the result.
 
-These options change the servo's built-in tuning: the gains, and how hard the motor may hold or
-brake. None of them has been tested on a mount. A bad value can make an axis hunt, buzz or
-overshoot. Only touch them if you understand servo tuning and can measure the result. Each one
-is limited to twice its stock value.
+Both axes have the same limits: twice the higher of the two stock values.
 
-| Option | Stock | What it does |
-| --- | --- | --- |
-| `--cap F` | 0.10 | The share of full motor drive allowed when holding, braking or pulling back. Shared by both axes. Range 0.05–0.20. Too high can cause hunting at rest. |
-| `--dec-kp N`, `--dec-ki N` | 25, 8 | Dec servo gains (proportional, integral). Range 1–50 and 1–16. |
-| `--ra-kp N`, `--ra-ki N` | 20, 16 | RA servo gains (proportional, integral). Range 1–40 and 1–32. |
+| Option | Stock (Dec / RA) | Range | What it does |
+| --- | --- | --- | --- |
+| `--cap F` | 0.10 (shared) | 0.05–0.20 | The share of full motor drive allowed when holding, braking or pulling back. Tested at 0.15 and 0.20 with no measurable effect. Too high can cause hunting at rest. |
+| `--dec-kp N`, `--ra-kp N` | 25 / 20 | 1–50 | Proportional gain. |
+| `--ra-ki N` | — / 16 | 1–32 | RA integral gain. (Dec's is `--dec-ki`, above.) |
 
 ## Going back
 
@@ -112,6 +119,9 @@ Tested on an EQ-AL55i Pro, bare mount, over USB:
 - **Dec start:** moves within 50 ms. Stock took 300–450 ms.
 - **Dec delivery:** 500 ms pulses in the same direction land within about 1 count of target
   (1 count ≈ 0.36″).
+- **Settling after gotos:** after gotos of 0.1–45°, Dec is within 2″ of target almost
+  immediately (stock gain: 1.3–1.7 s) and within 2 counts (under 1″) in about 1 s. RA is unchanged
+  at about 0.7 s.
 - **At rest:** Dec held still. RA is unchanged by the patches.
 
 ## License
