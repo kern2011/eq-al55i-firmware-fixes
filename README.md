@@ -143,8 +143,12 @@ Tested on an EQ-AL55i Pro, bare mount, over USB:
   from about 2.5 to 1.5 counts.
 - **In-position status:** "stopped" was reported with the axis within 5 counts on all 48 test
   gotos, 0.1–1.0 s later than stock. Guide pulses report "stopped" about 40 ms after they end.
-- **ConformU:** with `--recommended`, every pulse-guide test landed within tolerance on its
-  own axis.
+- **ConformU:** a full ASCOM ConformU telescope test with `--recommended`, over USB, ran for
+  21 minutes with every response time within ConformU's targets and no dropped connection.
+  All 16 directional pulse-guide tests (North, South, East and West at four hour angles, 5 s
+  each) landed within tolerance on their own axis: Dec within 1″ of the expected 37.6″, RA
+  within 0.07 s of the expected 2.51 s. Asynchronous single- and dual-axis pulse guiding
+  passed.
 - **At rest:** Dec held still.
 
 ## License
