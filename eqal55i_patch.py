@@ -14,6 +14,7 @@ Not affiliated with Sky-Watcher. Use entirely at your own risk. See README.md.
 Examples:
   python eqal55i_patch.py MC016_Ver0348.mcf --recommended
   python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --dec-ki 16
+  python eqal55i_patch.py MC016_Ver0348.mcf --recommended --round --in-position 5
   python eqal55i_patch.py --check MC016_Ver0348_p1p2p6_ff240_dki16.mcf
 """
 import argparse
@@ -98,6 +99,78 @@ FF_STUB = bytes.fromhex(
     "7047"      # done: bx lr
 )               # followed by .word N
 
+# P9: round instead of truncate. At every speed change the firmware restarts its
+# target trajectory from the current target position, converted to whole counts by
+# truncating toward 0 (0x08010B38). A guide pulse has about four speed changes, so
+# moves toward the home position gain up to ~3 counts and moves away lose up to ~3.
+# The hook calls a stub that rounds to the nearest count instead: trunc(x + 0.5*sign(x)).
+ROUND_HOOK = (0x10B38, bytes.fromhex("f7f72eff"), bytes.fromhex("00f0c2fd"))  # bl 0x080116C0
+ROUND_STUB_AT = 0x116C0
+ROUND_STUB = bytes.fromhex(
+    "10b5"      # push {r4,lr}
+    "c10f"      # lsrs r1,r0,#31      sign of x
+    "c907"      # lsls r1,r1,#31
+    "034a"      # ldr  r2,=0.5f
+    "1143"      # orrs r1,r2          +/-0.5
+    "fff74bfc"  # bl   0x08010F64     float add (firmware's own)
+    "f7f763f9"  # bl   0x08008998     float -> int, truncating (the call that was replaced)
+    "10bd"      # pop  {r4,pc}
+    "0000003f"  # .word 0.5f          (word-aligned at +0x14)
+)
+
+# P7: "in position" status. Stock :f reports "stopped" the moment the commanded move
+# ends, while the axis may still be sliding the last 10-37 counts in. The hook (where
+# the :f reply reads the running flag) calls a stub that keeps reporting "running"
+# until |servo error| <= N counts AND the measured speed (the firmware's own 100 ms
+# sample) is under 50 counts/s, or 1 s has passed since the stop. It then latches
+# "stopped" in axis flag bit 7, which the firmware clears whenever a move starts and
+# never uses otherwise, so the reply can't flip back. Only the :f reply changes.
+INPOS_HOOK = (0xDA34, bytes.fromhex("027ad206"), bytes.fromhex("03f0b4fe"))   # bl 0x080117A0
+INPOS_STUB_AT = 0x117A0
+INPOS_STUB = bytes.fromhex(
+    "0bb5"      # push {r0,r1,r3,lr}  r0 = axis data
+    "8268"      # ldr  r2,[r0,#8]     flags
+    "d306"      # lsls r3,r2,#27      running (bit 4)?
+    "1dd4"      # bmi  running
+    "1306"      # lsls r3,r2,#24      already latched stopped (bit 7)?
+    "19d4"      # bmi  stopped
+    "8269"      # ldr  r2,[r0,#0x18]  servo error (target - encoder)
+    "d317"      # asrs r3,r2,#31
+    "5a40"      # eors r2,r3
+    "d21a"      # subs r2,r2,r3       |error|
+    "0d4b"      # ldr  r3,=N
+    "9a42"      # cmp  r2,r3
+    "05dc"      # bgt  timeout        outside the window
+    "026f"      # ldr  r2,[r0,#0x70]  measured speed (float)
+    "5200"      # lsls r2,r2,#1
+    "5208"      # lsrs r2,r2,#1       |speed|
+    "0b4b"      # ldr  r3,=50.0f
+    "9a42"      # cmp  r2,r3
+    "07d3"      # blo  latch          in window and slow: stopped
+    "fcf703fc"  # timeout: bl 0x0800DFD0  microsecond clock (low word)
+    "009a"      # ldr  r2,[sp]
+    "126c"      # ldr  r2,[r2,#0x40]  time of the stop
+    "801a"      # subs r0,r0,r2
+    "084b"      # ldr  r3,=1000000
+    "9842"      # cmp  r0,r3
+    "06d3"      # blo  running        under 1 s: still settling
+    "0098"      # latch: ldr r0,[sp]
+    "8268"      # ldr  r2,[r0,#8]
+    "8023"      # movs r3,#0x80
+    "1a43"      # orrs r2,r3
+    "8260"      # str  r2,[r0,#8]     set bit 7
+    "0022"      # stopped: movs r2,#0 (N = 0)
+    "0bbd"      # pop  {r0,r1,r3,pc}
+    "0122"      # running: movs r2,#1
+    "d207"      # lsls r2,r2,#31      (N = 1)
+    "0bbd"      # pop  {r0,r1,r3,pc}
+    "c046"      # nop                 (literal alignment)
+)               # followed by .word N, 50.0f, 1000000
+INPOS_VMAX = 50.0
+INPOS_TIMEOUT_US = 1000000
+INPOS_DEFAULT = 5               # the value bench-tested
+INPOS_MIN, INPOS_MAX = 1, 10
+
 # P3: standstill/braking drive cap, a double used once at boot (stock 0.1).
 CAP_AT = 0x9628
 CAP_STOCK = 0.10
@@ -127,12 +200,14 @@ RANGES = {
     "usb": [(USB_HOOK[0], 4), (USB_STUB_AT, len(USB_STUB))],
     "ff": [(FF_HOOK[0], 4), (FF_STUB_AT, len(FF_STUB) + 4)],
     "cap": [(CAP_AT, 8)],
+    "round": [(ROUND_HOOK[0], 4), (ROUND_STUB_AT, len(ROUND_STUB))],
+    "inpos": [(INPOS_HOOK[0], 4), (INPOS_STUB_AT, len(INPOS_STUB) + 12)],
 }
 for _k, (_off, _r, _s, _m, _l, _t) in GAINS.items():
     RANGES[_k] = [(_off, 2)]
 # SHA-256 of the official file with all of the above ranges zeroed. An image whose
 # masked hash matches this is identical to the official file outside the patch sites.
-MASKED_STOCK_SHA256 = "03591f7ee461c5abd62ffeee1c6123de35c2bb193df615748cc1c02bafb46549"
+MASKED_STOCK_SHA256 = "9bf254145b249fbc3599c15aa28195674d7a9220df9a39dfc4b63e96dcbb45a2"
 
 
 def thumb_bl(src, dst):
@@ -154,7 +229,22 @@ def _self_check():
         assert a + n <= b, "patch ranges overlap"
     for a, n in spans:
         assert APP_START <= a and a + n <= VALID_WORD, "patch outside the application"
-    for a, n in ((USB_STUB_AT, len(USB_STUB)), (FF_STUB_AT, len(FF_STUB) + 4)):
+    assert thumb_bl(ROUND_HOOK[0], ROUND_STUB_AT) == ROUND_HOOK[2]
+    assert thumb_bl(INPOS_HOOK[0], INPOS_STUB_AT) == INPOS_HOOK[2]
+    assert ROUND_STUB[0x0A:0x0E] == thumb_bl(ROUND_STUB_AT + 0x0A, 0x10F64)
+    assert ROUND_STUB[0x0E:0x12] == thumb_bl(ROUND_STUB_AT + 0x0E, 0x8998)
+    assert ROUND_STUB[0x12:0x14] == bytes.fromhex("10bd") and ROUND_STUB_AT % 4 == 0
+    # ldr r2,[pc,#imm8*4] at +0x06 reads Align(pc+4,4) + imm: must land on the 0.5f literal.
+    lit = ((ROUND_STUB_AT + 0x06 + 4) & ~3) + ROUND_STUB[0x06] * 4 - ROUND_STUB_AT
+    assert ROUND_STUB[0x07] == 0x4A and struct.unpack_from("<f", ROUND_STUB, lit)[0] == 0.5
+    # The three ldr r3,=literal in the in-position stub must hit N, 50.0f and the timeout.
+    for at, want in ((0x14, 0), (0x20, 1), (0x30, 2)):
+        assert INPOS_STUB[at + 1] == 0x4B
+        assert ((INPOS_STUB_AT + at + 4) & ~3) + INPOS_STUB[at] * 4 == INPOS_STUB_AT + 0x4C + 4 * want
+    assert INPOS_STUB[0x26:0x2A] == thumb_bl(INPOS_STUB_AT + 0x26, 0xDFD0)
+    assert len(INPOS_STUB) == 0x4C and (INPOS_STUB_AT + 0x4C) % 4 == 0
+    for a, n in ((USB_STUB_AT, len(USB_STUB)), (FF_STUB_AT, len(FF_STUB) + 4),
+                 (ROUND_STUB_AT, len(ROUND_STUB)), (INPOS_STUB_AT, len(INPOS_STUB) + 12)):
         assert a >= APP_END and a % 4 == 0, "new code must be word-aligned free flash"
     kp = [g[2] for k, g in GAINS.items() if k.endswith("kp")]
     ki = [g[2] for k, g in GAINS.items() if k.endswith("ki")]
@@ -252,6 +342,16 @@ def build(stock, opt):
             put(img, off, movs(reg, stock_val), movs(reg, val),
                 "{} {} -> {} (P4)".format(label, stock_val, val))
             tags.append("{}{}".format(tag, val))
+    if opt["round"]:
+        put(img, ROUND_STUB_AT, b"\xff" * len(ROUND_STUB), ROUND_STUB, "round to nearest count, new code (P9)")
+        put(img, ROUND_HOOK[0], ROUND_HOOK[1], ROUND_HOOK[2], "round to nearest count, hook (P9)")
+        tags.append("rnd")
+    if opt["inpos"] is not None:
+        code = INPOS_STUB + struct.pack("<IfI", opt["inpos"], INPOS_VMAX, INPOS_TIMEOUT_US)
+        put(img, INPOS_STUB_AT, b"\xff" * len(code), code,
+            "in-position status, {} counts, new code (P7)".format(opt["inpos"]))
+        put(img, INPOS_HOOK[0], INPOS_HOOK[1], INPOS_HOOK[2], "in-position status, hook (P7)")
+        tags.append("ip{}".format(opt["inpos"]))
     verify(stock, bytes(img), opt)
     return bytes(img), tags
 
@@ -327,6 +427,23 @@ def describe(data):
         else:
             lines.append("  {:<26} CHANGED, {}".format(name, b[0]))
             patched = True
+    site("Round to nearest (P9)", ROUND_HOOK[0], ROUND_HOOK[1], ROUND_HOOK[2])
+    rcode = data[ROUND_STUB_AT:ROUND_STUB_AT + len(ROUND_STUB)]
+    if data[ROUND_HOOK[0]:ROUND_HOOK[0] + 4] == ROUND_HOOK[2] and rcode != ROUND_STUB:
+        lines[-1] = "  {:<26} unknown bytes".format("Round to nearest (P9)")
+    name = "In-position status (P7)"
+    ihook = data[INPOS_HOOK[0]:INPOS_HOOK[0] + 4]
+    icode = data[INPOS_STUB_AT:INPOS_STUB_AT + len(INPOS_STUB)]
+    if ihook == INPOS_HOOK[1] and icode == b"\xff" * len(INPOS_STUB):
+        lines.append("  {:<26} stock (off)".format(name))
+    else:
+        n, vmax, tmo = struct.unpack_from("<IfI", data, INPOS_STUB_AT + len(INPOS_STUB))
+        if (ihook == INPOS_HOOK[2] and icode == INPOS_STUB and INPOS_MIN <= n <= INPOS_MAX
+                and vmax == INPOS_VMAX and tmo == INPOS_TIMEOUT_US):
+            lines.append("  {:<26} PATCHED, {} counts".format(name, n))
+        else:
+            lines.append("  {:<26} unknown bytes".format(name))
+        patched = True
     return lines, patched
 
 
@@ -437,6 +554,15 @@ def parse_args(argv):
                    help="Dec integral gain, 1-{} (stock {}; --recommended uses {}, the only "
                         "value tested above stock)".format(KI_MAX, GAINS["dec_ki"][2], DKI_DEFAULT))
 
+    g = ap.add_argument_group("both axes")
+    g.add_argument("--round", action="store_true",
+                   help="round the firmware's target to the nearest count instead of truncating "
+                        "(removes the ~3-count direction bias on guide pulses)")
+    g.add_argument("--in-position", type=int, metavar="N",
+                   help="after a move, :f reports 'stopped' only once the axis is within N counts "
+                        "({}-{}) and nearly still, or after 1 s ({} was tested)"
+                        .format(INPOS_MIN, INPOS_MAX, INPOS_DEFAULT))
+
     g = ap.add_argument_group("advanced (leave at stock; need --experimental)")
     g.add_argument("--experimental", action="store_true",
                    help="required for any option in this group")
@@ -457,7 +583,8 @@ def main(argv=None):
     if a.check:
         if a.input or any(getattr(a, k) not in (None, False) for k in
                           ("recommended", "fix_usb", "fix_d_cr", "fix_x06", "fix_all",
-                           "dec_ff", "cap", "experimental") + tuple(GAINS)):
+                           "dec_ff", "cap", "experimental", "round", "in_position")
+                          + tuple(GAINS)):
             fail("use --check FILE on its own")
         return check(a.check)
     if not a.input:
@@ -469,12 +596,16 @@ def main(argv=None):
         "x06": a.fix_x06 or a.fix_all or a.recommended,
         "ff": a.dec_ff if a.dec_ff is not None else (FF_DEFAULT if a.recommended else None),
         "cap": a.cap,
+        "round": a.round,
+        "inpos": a.in_position,
     }
     for key in GAINS:
         opt[key] = getattr(a, key)
     if opt["dec_ki"] is None and a.recommended:
         opt["dec_ki"] = DKI_DEFAULT
 
+    if opt["inpos"] is not None and not INPOS_MIN <= opt["inpos"] <= INPOS_MAX:
+        fail("--in-position must be {}..{}".format(INPOS_MIN, INPOS_MAX))
     if opt["ff"] is not None and not 1 <= opt["ff"] <= FF_MAX:
         fail("--dec-ff must be 1..{}".format(FF_MAX))
     advanced = [k for k in ("cap",) + ADVANCED_GAINS if opt[k] is not None]

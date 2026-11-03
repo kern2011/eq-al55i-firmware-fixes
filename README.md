@@ -46,6 +46,20 @@ servo's integral term then has to build up enough drive to move it the rest of t
 friction. With the stock gain that's slow, so the last few counts take 1–2 s. Doubling the Dec
 integral gain (8 → 16) makes it build twice as fast. RA is not changed.
 
+**Rounding (`--round`).** At every change of speed the firmware restarts its internal target
+from the current target position, cutting it to a whole encoder count by rounding toward the
+mount's home position. A guide pulse has about four speed changes, so pulses toward home gain
+up to 3 counts and pulses away from home lose up to 3. Away from home this shows up as one
+direction of guide pulse consistently coming in longer than the other, on both axes. The fix
+rounds to the nearest count instead.
+
+**In-position status (`--in-position N`).** The mount tells apps a move has finished (the
+`:f` status) the moment its planned motion ends, while the axis can still be sliding the last
+10–37 counts (up to about 13″) onto the target. With this option the mount reports "stopped"
+only once the axis is within N counts of the target and nearly still, or after 1 s at most.
+It changes only what the mount reports, not how it moves. With N = 5 an app that starts an
+exposure or plate solve on "stopped" sees the axis within about 2″.
+
 **`:D` reply fix.** The `:D` command returns its value without the carriage return that
 ends every other reply. Some drivers then wait for, or mis-read, the next reply.
 
@@ -75,6 +89,12 @@ from the stock file with the full set of options. For example, `--recommended` i
 python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --dec-ki 16
 ```
 
+The build with every tested option:
+
+```
+python eqal55i_patch.py MC016_Ver0348.mcf --recommended --round --in-position 5
+```
+
 ### Options
 
 | Option | What it does |
@@ -86,6 +106,8 @@ python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-f
 | `--fix-all` | All three fixes above, without changing Dec motion. |
 | `--dec-ff N` | Dec feed-forward strength, in motor-drive units out of 2401. Range 1–300; `--recommended` uses 240. 180–240 suits most setups. |
 | `--dec-ki N` | Dec integral gain (stock 8). Range 1–32; `--recommended` uses 16, the only value tested above stock. Higher closes the last few counts faster after a move. |
+| `--round` | Round the firmware's target to the nearest count instead of toward home. Both axes. |
+| `--in-position N` | Report "stopped" only when the axis is within N counts (1–10) and nearly still, or after 1 s. 5 was tested. Both axes. |
 | `--check FILE` | Shows which fixes a `.mcf` file contains. |
 
 ### Advanced options (need `--experimental`)
@@ -122,6 +144,13 @@ Tested on an EQ-AL55i Pro, bare mount, over USB:
 - **Settling after gotos:** after gotos of 0.1–45°, Dec is within 2″ of target almost
   immediately (stock gain: 1.3–1.7 s) and within 2 counts (under 1″) in about 1 s. RA is unchanged
   at about 0.7 s.
+- **Rounding:** in ASCOM ConformU's pulse-guide tests, the difference between East and West RA
+  pulses dropped from about 3.5 counts to under 1, and between North and South Dec pulses
+  from about 2.5 to 1.5 counts.
+- **In-position status:** "stopped" was reported with the axis within 5 counts on all 48 test
+  gotos, 0.1–1.0 s later than stock. Guide pulses report "stopped" about 40 ms after they end.
+- **ConformU:** with `--recommended --round --in-position 5`, every pulse-guide test landed
+  within tolerance on its own axis.
 - **At rest:** Dec held still. RA is unchanged by the patches.
 
 ## License
