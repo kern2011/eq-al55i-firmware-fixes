@@ -83,10 +83,11 @@ Flash it with Sky-Watcher's loader, with the mount bare and powered from a stabl
 
 **Choose all your options in one command.** Each build starts from the official stock file,
 and the script won't accept an already-patched file. To add or change a fix later, build again
-from the stock file with the full set of options. For example, `--recommended` is the same as:
+from the stock file with the full set of options. For example, `--recommended` is these
+options plus Dec integral gain 16:
 
 ```
-python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --dec-ki 16 --round --in-position 5
+python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-ff 240 --round --in-position 5
 ```
 
 ### Options
@@ -99,26 +100,26 @@ python eqal55i_patch.py MC016_Ver0348.mcf --fix-usb --fix-d-cr --fix-x06 --dec-f
 | `--fix-x06` | `:X 06` fix only. |
 | `--fix-all` | All three fixes above, without changing Dec motion. |
 | `--dec-ff N` | Dec feed-forward strength, in motor-drive units out of 2401. Range 1–300; `--recommended` uses 240. 180–240 suits most setups. |
-| `--dec-ki N` | Dec integral gain (stock 8). Range 1–32; `--recommended` uses 16, the only value tested above stock. Higher closes the last few counts faster after a move. |
 | `--round` | Round the firmware's target to the nearest count instead of toward home. Both axes. Included in `--recommended`. |
 | `--in-position N` | Report "stopped" only when the axis is within N counts (1–10) and nearly still, or after 1 s. Both axes. `--recommended` uses 5, the value tested. |
 | `--check FILE` | Shows which fixes a `.mcf` file contains. |
 
 ### Advanced options (need `--experimental`)
 
-**Leave these at stock.** `--recommended` already includes the one servo change that helped on
-the bench (Dec integral gain 16). The settings below adjust the rest of the servo tuning: the
-other gains, and how hard the motor may hold or brake. None of them improved anything in
-testing, and a bad value can make an axis hunt, buzz or overshoot. Only touch them if you
-understand servo tuning and can measure the result.
+**Leave these alone.** `--recommended` already includes the one servo change that helped on
+the bench (Dec integral gain 16). The settings below adjust the servo tuning: the gains, and
+how hard the motor may hold or brake. Apart from Dec integral gain 16, none of them improved
+anything in testing, and a bad value can make an axis hunt, buzz or overshoot. Only touch them
+if you understand servo tuning and can measure the result.
 
 Both axes have the same limits: twice the higher of the two stock values.
 
 | Option | Stock (Dec / RA) | Range | What it does |
 | --- | --- | --- | --- |
 | `--cap F` | 0.10 (shared) | 0.05–0.20 | The share of full motor drive allowed when holding, braking or pulling back. Tested at 0.15 and 0.20 with no measurable effect. Too high can cause hunting at rest. |
+| `--dec-ki N` | 8 / — | 1–32 | Dec integral gain. `--recommended` uses 16, the only value tested above stock. Higher closes the last few counts faster after a move. |
 | `--dec-kp N`, `--ra-kp N` | 25 / 20 | 1–50 | Proportional gain. |
-| `--ra-ki N` | — / 16 | 1–32 | RA integral gain. (Dec's is `--dec-ki`, above.) |
+| `--ra-ki N` | — / 16 | 1–32 | RA integral gain. |
 
 ## Going back
 

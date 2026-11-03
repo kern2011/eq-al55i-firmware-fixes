@@ -13,7 +13,7 @@ Not affiliated with Sky-Watcher. Use entirely at your own risk. See README.md.
 
 Examples:
   python eqal55i_patch.py MC016_Ver0348.mcf --recommended
-  python eqal55i_patch.py MC016_Ver0348.mcf --fix-all --dec-ff 240 --dec-ki 16 --round --in-position 5
+  python eqal55i_patch.py MC016_Ver0348.mcf --fix-all --dec-ff 240 --round --in-position 5
   python eqal55i_patch.py --check MC016_Ver0348_p1p2p6_ff240_dki16_rnd_ip5.mcf
 """
 import argparse
@@ -183,8 +183,8 @@ GAINS = {   # option: (offset, register, stock, max, label, name-tag)
     "ra_kp": (0x9A8C, 0, 20, KP_MAX, "RA Kp", "rkp"),
     "ra_ki": (0x9A90, 0, 16, KI_MAX, "RA Ki", "rki"),
 }
-ADVANCED_GAINS = ("dec_kp", "ra_kp", "ra_ki")   # need --experimental; dec_ki does not
-DKI_DEFAULT = 16                                # --recommended; the value bench-tested
+ADVANCED_GAINS = ("dec_ki", "dec_kp", "ra_kp", "ra_ki")   # all need --experimental
+DKI_DEFAULT = 16                # --recommended sets this without --experimental; bench-tested
 
 FF_DEFAULT = 240
 FF_MAX = 300
@@ -250,7 +250,7 @@ def _self_check():
     assert KP_MAX == 2 * max(kp) and KI_MAX == 2 * max(ki), "limits: 2x the higher stock value"
     for _off, _reg, stock_val, top, _l, _t in GAINS.values():
         assert stock_val < top <= 255
-    assert 1 <= DKI_DEFAULT <= GAINS["dec_ki"][3] and set(ADVANCED_GAINS) < set(GAINS)
+    assert 1 <= DKI_DEFAULT <= GAINS["dec_ki"][3] and set(ADVANCED_GAINS) == set(GAINS)
 
 
 _self_check()
@@ -550,9 +550,6 @@ def parse_args(argv):
     g.add_argument("--dec-ff", type=int, metavar="N",
                    help="Dec feed-forward strength, 1-{} of 2401 (--recommended uses {})"
                         .format(FF_MAX, FF_DEFAULT))
-    g.add_argument("--dec-ki", type=int, metavar="N",
-                   help="Dec integral gain, 1-{} (stock {}; --recommended uses {}, the only "
-                        "value tested above stock)".format(KI_MAX, GAINS["dec_ki"][2], DKI_DEFAULT))
 
     g = ap.add_argument_group("both axes")
     g.add_argument("--round", action="store_true",
@@ -570,8 +567,9 @@ def parse_args(argv):
                    help="hold/brake drive share, {}-{} (stock {})".format(CAP_MIN, CAP_MAX, CAP_STOCK))
     for key in ADVANCED_GAINS:
         _, _, stock_val, top, label, _ = GAINS[key]
+        extra = "; --recommended uses {}".format(DKI_DEFAULT) if key == "dec_ki" else ""
         g.add_argument("--" + key.replace("_", "-"), type=int, metavar="N",
-                       help="{}, 1-{} (stock {})".format(label, top, stock_val))
+                       help="{}, 1-{} (stock {}{})".format(label, top, stock_val, extra))
 
     g = ap.add_argument_group("other")
     g.add_argument("--check", metavar="FILE", help="show which fixes a .mcf file contains")
@@ -602,14 +600,14 @@ def main(argv=None):
     }
     for key in GAINS:
         opt[key] = getattr(a, key)
-    if opt["dec_ki"] is None and a.recommended:
-        opt["dec_ki"] = DKI_DEFAULT
 
     if opt["inpos"] is not None and not INPOS_MIN <= opt["inpos"] <= INPOS_MAX:
         fail("--in-position must be {}..{}".format(INPOS_MIN, INPOS_MAX))
     if opt["ff"] is not None and not 1 <= opt["ff"] <= FF_MAX:
         fail("--dec-ff must be 1..{}".format(FF_MAX))
     advanced = [k for k in ("cap",) + ADVANCED_GAINS if opt[k] is not None]
+    if opt["dec_ki"] is None and a.recommended:
+        opt["dec_ki"] = DKI_DEFAULT     # part of the tested build; no --experimental needed
     if advanced and not a.experimental:
         fail("--{} is an advanced option: leave it at stock unless you can measure the "
              "result. To use it anyway, add --experimental."
