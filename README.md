@@ -25,9 +25,8 @@ Firmware v3.48 has a few bugs, two of which affect everyday use:
 - **Late Dec guide corrections.** At the start of a Dec guide pulse, the motor doesn't move
   for about 0.3–0.45 s. Short corrections arrive late or come up short.
 
-On a guided setup these bugs look a lot like backlash. [GUIDING.md](GUIDING.md) shows, with
-flowcharts, how tracking and guiding behave before and after `--recommended`, and how to tell
-the firmware's lag from real gear play.
+These bugs are easy to mistake for backlash. See [GUIDING.md](GUIDING.md) for how guiding
+behaves before and after `--recommended`.
 
 ## What the fixes do
 
