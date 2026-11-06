@@ -154,6 +154,26 @@ Tested on an EQ-AL55i Pro, bare mount, over USB:
   passed.
 - **At rest:** Dec held still.
 
+### Dec guide pulses, before and after a mechanical service
+
+The same mount was tested three times: on stock firmware, again on stock after a full
+strip, clean and re-lube, then on `--recommended`. Each test sent 20 Dec pulses each way at
+0.5, 2 and 5 s, at 0.5× sidereal with the mount at home and tracking on, and read the position
+2 s after each pulse. The values are how much of the requested movement was delivered.
+
+| Dec | Stock, before service | Stock, after service | `--recommended` |
+| --- | --- | --- | --- |
+| Worst pulse length | 39.7% | 76.6% | 90.0% |
+| Range | 39.7–99.2% | 76.6–104.4% | 90.0–97.8% |
+| Pulse-to-pulse spread (avg SD) | 0.42″ | 0.30″ | 0.23″ |
+| 0.5 s pulses, North / South | 55.5% / 39.7% | 92.4% / 76.6% | 90.4% / 90.0% |
+| 2 s pulses, North / South | 94.1% / 86.5% | 104.4% / 97.2% | 95.1% / 95.1% |
+
+The service brought short pulses most of the way up, but left North and South as uneven as
+before. `--recommended` evens them out and tightens the spread. Dec still comes up about 1–2
+counts (under 1″) short per pulse. RA was within 94–104% in all three tests, with no clear
+change.
+
 ## License
 
 MIT, for the script only. The firmware belongs to Sky-Watcher; don't share patched files.
