@@ -12,8 +12,9 @@ Stock v3.48 has a Dec delay that looks the same in a guiding log, but it happens
 of **every** Dec pulse, even two in a row in the same direction. If you see lag on
 same-direction pulses, it's the firmware, not (only) the gears.
 
-The patches don't remove real gear play. They remove the firmware problems that get mistaken
-for it.
+The patches remove the firmware problems that get mistaken for backlash. If your mount also
+has real gear play, they may help, because Dec starts pushing straight away after a reversal
+and takes up the play sooner. They won't fix it: the play is still there.
 
 ## Dec guide pulses
 
