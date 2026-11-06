@@ -40,8 +40,12 @@ cover on holding power.
 finishes, so most of the move is left to holding power. The axis creeps the rest of the way or
 stops short.
 
-**After:** feed-forward keeps Dec with the target, so little is left when holding power takes
-over, and Dec gain 16 closes the rest about twice as fast.
+**After:** feed-forward gets Dec moving straight away, which breaks the stiction, and keeps
+it with the target. When holding power takes over, the axis is already moving and has little
+left to cover. Dec gain 16 closes the rest about twice as fast.
+
+Holding power stays at 10%. The patch leaves it less to do instead of raising it. Raising it
+(`--cap`) made no measurable difference in testing.
 
 ## North vs South, East vs West
 
