@@ -13,8 +13,7 @@ is that it happens at the start of every Dec pulse, not only after a reversal. I
 even when two pulses in a row go the same way, the firmware is at least part of the problem.
 
 The patches remove that delay. They can't remove gear play, but if your mount has some, they
-may make it less of a problem: Dec starts pushing as soon as it reverses, so the play is taken
-up sooner.
+may make it less of a problem.
 
 ## Dec guide pulses
 
