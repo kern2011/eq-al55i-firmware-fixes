@@ -8,9 +8,7 @@ Numbers are from the [Results](README.md#results) in the README.
 Backlash is play in the gears. When an axis reverses, the motor has to take up that play
 before the sky moves, so corrections in the new direction arrive late.
 
-Stock v3.48 adds a delay of its own that looks just like it in a guiding log. The difference
-is that it happens at the start of every Dec pulse, not only after a reversal. If Dec lags
-even when two pulses in a row go the same way, the firmware is at least part of the problem.
+Stock v3.48 adds a delay of its own that looks just like it in a guiding log.
 
 The patches remove that delay. They can't remove gear play, but if your mount has some, they
 may make it less of a problem.
