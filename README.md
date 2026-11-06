@@ -25,6 +25,9 @@ Firmware v3.48 has a few bugs, two of which affect everyday use:
 - **Late Dec guide corrections.** At the start of a Dec guide pulse, the motor doesn't move
   for about 0.3–0.45 s. Short corrections arrive late or come up short.
 
+These bugs are easy to mistake for backlash. See [GUIDING.md](GUIDING.md) for how guiding
+behaves before and after `--recommended`.
+
 ## What the fixes do
 
 The script takes the **official** `MC016_Ver0348.mcf` from Sky-Watcher and builds a patched
@@ -131,7 +134,7 @@ Both axes have the same limits: twice the higher of the two stock values.
 Tested on an EQ-AL55i Pro, bare mount, over USB:
 
 - **USB:** 0 bad replies in over 70,000 commands, and no retries in a 25-minute driver
-  session. Stock needed 3–10 retries.
+  session.
 - **Dec start:** moves within 50 ms. Stock took 300–450 ms.
 - **Dec delivery:** 500 ms pulses in the same direction land within about 1 count of target
   (1 count ≈ 0.36″).
