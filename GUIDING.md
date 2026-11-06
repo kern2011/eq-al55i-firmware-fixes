@@ -30,6 +30,19 @@ Before: ......>>>
 After:  >>>>>>>>>
 ```
 
+## Holding power cuts slow moves short
+
+The firmware drops the motor to holding power (10% of full drive) as soon as its **target**
+reaches the goal, not when the **axis** does. Whatever the axis still has to travel, it has to
+cover on holding power.
+
+**Before:** on a slow move like a guide pulse, Dec has barely started when the target
+finishes, so most of the move is left to holding power. The axis creeps the rest of the way or
+stops short.
+
+**After:** feed-forward keeps Dec with the target, so little is left when holding power takes
+over, and Dec gain 16 closes the rest about twice as fast.
+
 ## North vs South, East vs West
 
 **Before:** at each speed change the firmware rounds its target toward home. Pulses one way
@@ -46,13 +59,6 @@ takes another 1–2 s to finish. The first guide frames see the star drifting in
 
 **After (`--in-position 5`, Dec gain 16):** Dec finishes about twice as fast, and "stopped"
 is only reported once the axis is within about 2″.
-
-## USB
-
-**Before:** replies sent quickly can overwrite each other, so the driver retries and pulses
-arrive late at random.
-
-**After:** each reply waits for the last one. 0 bad replies in over 70,000 commands.
 
 ## After flashing
 
