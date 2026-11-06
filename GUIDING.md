@@ -16,8 +16,7 @@ may make it less of a problem.
 ## Dec guide pulses
 
 **Before:** at the start of a pulse, Dec sits still for 0.3–0.45 s until the servo pushes hard
-enough to beat gear friction. Short corrections arrive late or come up short. The guider sends
-more, then they all land at once and overshoot.
+enough to beat gear friction. Short corrections arrive late or come up short.
 
 **After:** an extra push in the direction of travel (feed-forward) gets Dec moving within
 50 ms. A 500 ms pulse lands within about 1 count (0.36″).
