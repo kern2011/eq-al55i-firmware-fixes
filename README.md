@@ -25,6 +25,10 @@ Firmware v3.48 has a few bugs, two of which affect everyday use:
 - **Late Dec guide corrections.** At the start of a Dec guide pulse, the motor doesn't move
   for about 0.3–0.45 s. Short corrections arrive late or come up short.
 
+On a guided setup these bugs look a lot like backlash. [GUIDING.md](GUIDING.md) shows, with
+flowcharts, how tracking and guiding behave before and after `--recommended`, and how to tell
+the firmware's lag from real gear play.
+
 ## What the fixes do
 
 The script takes the **official** `MC016_Ver0348.mcf` from Sky-Watcher and builds a patched
